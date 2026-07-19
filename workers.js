@@ -2,8 +2,8 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const KV = env.bt_KV;
-    const ADMIN_USER = "admin"; //用户名
-    const ADMIN_PASS = "1234567890"; //密码
+    const ADMIN_USER = env.ADMIN_USER;
+    const ADMIN_PASS = env.ADMIN_PASS;
     const LOGIN_TOKEN = "admin_login_ok_2026";
     const KV_DATA_KEY = "bt_list";
     const YEAR_SEC = 31536000;
