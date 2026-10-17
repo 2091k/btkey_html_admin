@@ -95,8 +95,16 @@ export default {
       }
 
       // 未激活，绑定设备
-      const now = new Date();
-      const activateTime = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")} ${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}:${String(now.getSeconds()).padStart(2,"0")}`;
+      // 获取北京时间 UTC+8
+const utcNow = Date.now();
+const beijingTime = new Date(utcNow + 8 * 3600 * 1000);
+const year = beijingTime.getFullYear();
+const month = String(beijingTime.getMonth() + 1).padStart(2, "0");
+const day = String(beijingTime.getDate()).padStart(2, "0");
+const hour = String(beijingTime.getHours()).padStart(2, "0");
+const minute = String(beijingTime.getMinutes()).padStart(2, "0");
+const second = String(beijingTime.getSeconds()).padStart(2, "0");
+const activateTime = `${year}-${month}-${day} ${hour}:${minute}:${second}`;
       lines[targetIndex] = `${serial}|${deviceId}|${activateTime}|已激活|${note}`;
       await saveData(lines);
       return textRes("on");
