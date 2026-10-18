@@ -936,6 +936,41 @@ export default {
         : `序列号「${delSn}」不存在`));
     }
 
+    // ==================== GET 作废 / 恢复单条序列号（需登录） ====================
+    //   ?void_sn=号    → 标记「已作废」：不再发放、不能再被客户端激活
+    //   ?unvoid_sn=号  → 撤销作废，恢复正常（原来已激活过的仍绑原设备）
+    if (url.searchParams.has("void_sn") || url.searchParams.has("unvoid_sn")) {
+      if (!isLogin()) return redirect(backUrl(catParam, "登录已失效，请重新登录"));
+      const unvoid = url.searchParams.has("unvoid_sn");
+      const serial = String(url.searchParams.get(unvoid ? "unvoid_sn" : "void_sn") || "").trim();
+      if (!serial) return redirect(backUrl(catParam, "序列号不能为空"));
+
+      const records = await getRecords();
+      const rec = records.find(r => r.serial === serial);
+      if (!rec) return redirect(backUrl(catParam, `序列号「${serial}」不存在`));
+
+      if (unvoid) {
+        // 原来激活过的（有设备+时间）恢复后仍是「已激活」，不会被重复发放
+        const hadDevice = !!(rec.device && rec.time);
+        if (!isVoid(rec) && rec.status !== "已作废") {
+          return redirect(backUrl(catParam, `「${serial}」本来就没作废，不用恢复`));
+        }
+        rec.status = "";
+        await saveRecords(records);
+        msg = hadDevice
+          ? `已恢复「${serial}」：它之前激活过，仍绑定设备 ${rec.device}`
+          : `已恢复「${serial}」：现在是可发放状态`;
+        return redirect(backUrl(catParam, msg));
+      }
+
+      if (isVoid(rec)) return redirect(backUrl(catParam, `「${serial}」已经是已作废状态`));
+      rec.status = "已作废";
+      await saveRecords(records);
+      await KV.delete("claiminfo:" + serial);
+      msg = `已作废「${serial}」：不再发放、客户端激活会返回 off；想撤销点同行的「恢复」`;
+      return redirect(backUrl(catParam, msg));
+    }
+
     // ==================== GET删除分类 ?del_cat=名称&mode=keep|wipe（需登录） ====================
     if (url.searchParams.has("del_cat")) {
       if (!isLogin()) return redirect(backUrl(catParam, "登录已失效，请重新登录"));
@@ -1183,6 +1218,13 @@ export default {
                 </form>
             </td>
             <td>
+                ${isVoid(r)
+                  ? `<a href="?unvoid_sn=${enc(r.serial)}&cat=${enc(backCatValue(catFilter))}"
+                        class="green-btn"
+                        onclick="return confirm('恢复序列号 ${esc(r.serial)} ？\\n恢复后它可以重新被发放（原来激活过的仍绑原设备）。')">恢复</a>`
+                  : `<a href="?void_sn=${enc(r.serial)}&cat=${enc(backCatValue(catFilter))}"
+                        class="del-btn danger"
+                        onclick="return confirm('作废序列号 ${esc(r.serial)} ？\\n作废后不再发放，客户端激活会返回 off；随时可以点「恢复」还原。')">作废</a>`}
                 <a href="?del_sn=${enc(r.serial)}&cat=${enc(backCatValue(catFilter))}"
                    class="del-btn" onclick="return confirm('确定删除序列号 ${esc(r.serial)} ？')">删除</a>
             </td>

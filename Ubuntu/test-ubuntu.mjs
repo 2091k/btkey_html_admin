@@ -245,6 +245,50 @@ if (ready) {
   });
   const readList = async () => (await (await fetch(BASE + '/', { headers: { Cookie: cookie } })).text());
 
+  // ───────── ⑤ 作废 / 恢复 ─────────
+  {
+    await postForm({ add_batch: '1', batch: 'BT-VOID-001', cat: 'wxminiapp', back_cat: 'wxminiapp' });
+    ok((await readList()).includes('BT-VOID-001'), '作废测试用的号应已添加');
+
+    // ① 后台点「作废」
+    const r1 = await fetch(BASE + '/?void_sn=BT-VOID-001', { headers: { Cookie: cookie }, redirect: 'manual' });
+    const loc1 = locOf(r1.headers.get('location'));
+    ok(r1.status === 302 && /已作废/.test(loc1), '作废应成功并提示', loc1);
+    ok(/BT-VOID-001[\s\S]{0,600}?恢复/.test(await readList()), '作废后该行应出现「恢复」按钮');
+
+    // ② 库里状态应为已作废，且客户端激活返回 off
+    {
+      const { DatabaseSync } = await import('node:sqlite');
+      const dbx = new DatabaseSync(DB_PATH);
+      const st = dbx.prepare("SELECT status FROM serials WHERE serial = 'BT-VOID-001'").get();
+      ok(st && st.status === '已作废', '库里状态应变成已作废', st);
+      dbx.close();
+      const r = await fetch(BASE + '/?device_id=DEV-TEST-1&serial=BT-VOID-001');
+      ok((await r.text()).trim() === 'off', '作废的号客户端激活应返回 off');
+    }
+
+    // ③ 恢复
+    const r2 = await fetch(BASE + '/?unvoid_sn=BT-VOID-001', { headers: { Cookie: cookie }, redirect: 'manual' });
+    ok(r2.status === 302 && /已恢复/.test(locOf(r2.headers.get('location'))), '恢复应成功并提示', locOf(r2.headers.get('location')));
+    {
+      const { DatabaseSync } = await import('node:sqlite');
+      const dbx = new DatabaseSync(DB_PATH);
+      const st = dbx.prepare("SELECT status, device FROM serials WHERE serial = 'BT-VOID-001'").get();
+      ok(st && st.status === '' && !st.device, '恢复后状态应清空（可重新发放）', st);
+      dbx.close();
+    }
+
+    // ④ 恢复后能正常激活
+    {
+      const r = await fetch(BASE + '/?device_id=DEV-TEST-1&serial=BT-VOID-001');
+      ok((await r.text()).trim() === 'on', '恢复后应能正常激活');
+    }
+
+    // ⑤ 重复恢复只给提示，不报错
+    const r3 = await fetch(BASE + '/?unvoid_sn=BT-VOID-001', { headers: { Cookie: cookie }, redirect: 'manual' });
+    ok(r3.status === 302, '重复恢复不应报错', r3.status);
+  }
+
   // 合并导入：删掉一个号后用备份恢复
   {
     await fetch(BASE + '/?del_sn=BT-U-002', { headers: { Cookie: cookie }, redirect: 'manual' });
